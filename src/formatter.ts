@@ -19,7 +19,7 @@ function activitySourceLabel(entry: ActivityEntry): string {
     case 'chatwork':
       return `💬 Chatwork (${entry.roomOrRepo})`;
     case 'github':
-      return `GitHub (${entry.roomOrRepo})`;
+      return `🐙 GitHub (${entry.roomOrRepo})`;
   }
 }
 

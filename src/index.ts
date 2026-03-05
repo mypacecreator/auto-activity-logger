@@ -90,6 +90,10 @@ async function main() {
   if (opts.chatwork) {
     const cwToken = requireEnv('CHATWORK_API_TOKEN');
     const cwAccountId = parseInt(requireEnv('CHATWORK_MY_ACCOUNT_ID'), 10);
+    if (isNaN(cwAccountId)) {
+      console.error('[ERROR] CHATWORK_MY_ACCOUNT_ID must be a valid integer.');
+      process.exit(1);
+    }
 
     const roomIdEnv = process.env.CHATWORK_ROOM_IDS ?? '';
     const roomIds = roomIdEnv
