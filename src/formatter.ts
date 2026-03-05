@@ -1,6 +1,10 @@
 import fs from 'fs';
 import path from 'path';
-import type { ActivityEntry, DateRange } from './types.js';
+import type { ActivityEntry, DateRange, ScreenshotEntry } from './types.js';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function pad(n: number): string {
   return String(n).padStart(2, '0');
@@ -10,16 +14,81 @@ function formatTime(date: Date): string {
   return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-function sourceLabel(entry: ActivityEntry): string {
+function activitySourceLabel(entry: ActivityEntry): string {
   switch (entry.source) {
     case 'chatwork':
-      return `Chatwork (${entry.roomOrRepo})`;
+      return `💬 Chatwork (${entry.roomOrRepo})`;
     case 'github':
       return `GitHub (${entry.roomOrRepo})`;
   }
 }
 
-export function buildMarkdown(entries: ActivityEntry[], range: DateRange): string {
+// ---------------------------------------------------------------------------
+// Unified timeline
+// ---------------------------------------------------------------------------
+
+type TimelineItem =
+  | { kind: 'activity'; timestamp: Date; data: ActivityEntry }
+  | { kind: 'screenshot'; timestamp: Date; data: ScreenshotEntry };
+
+function buildTimeline(
+  activities: ActivityEntry[],
+  screenshots: ScreenshotEntry[],
+): TimelineItem[] {
+  const items: TimelineItem[] = [
+    ...activities.map((a) => ({ kind: 'activity' as const, timestamp: a.timestamp, data: a })),
+    ...screenshots.map((s) => ({ kind: 'screenshot' as const, timestamp: s.timestamp, data: s })),
+  ];
+  return items.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+}
+
+// ---------------------------------------------------------------------------
+// Section renderers
+// ---------------------------------------------------------------------------
+
+function renderActivity(entry: ActivityEntry, lines: string[]): void {
+  lines.push(`## [${formatTime(entry.timestamp)}] ${activitySourceLabel(entry)}`);
+  lines.push('');
+  lines.push(`- **${entry.eventType}**: ${entry.summary}`);
+  lines.push('');
+}
+
+function renderScreenshot(entry: ScreenshotEntry, lines: string[]): void {
+  const matched = entry.matchedActivity;
+
+  if (matched) {
+    const matchLabel = activitySourceLabel(matched);
+    lines.push(`## [${formatTime(entry.timestamp)}] 📸 Screenshot & ${matchLabel}`);
+    lines.push('');
+    lines.push(`- **Screenshot:** ${entry.filename}`);
+
+    if (matched.source === 'chatwork') {
+      lines.push(`- **Chatwork (${matched.roomOrRepo}):** ${matched.summary}`);
+    } else {
+      lines.push(`- **GitHub (${matched.roomOrRepo}):** ${matched.summary}`);
+    }
+
+    if (entry.inference) {
+      lines.push(`- **推測:** ${entry.inference}`);
+    }
+  } else {
+    lines.push(`## [${formatTime(entry.timestamp)}] 📸 Screenshot`);
+    lines.push('');
+    lines.push(`- **Screenshot:** ${entry.filename}`);
+  }
+
+  lines.push('');
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+export function buildMarkdown(
+  activities: ActivityEntry[],
+  range: DateRange,
+  screenshots: ScreenshotEntry[] = [],
+): string {
   const lines: string[] = [];
 
   lines.push(`# Activity Log — ${range.label}`);
@@ -29,31 +98,29 @@ export function buildMarkdown(entries: ActivityEntry[], range: DateRange): strin
   );
   lines.push('');
 
-  if (entries.length === 0) {
+  if (activities.length === 0 && screenshots.length === 0) {
     lines.push('_No activities recorded for this day._');
     return lines.join('\n');
   }
 
-  // Sort chronologically
-  const sorted = [...entries].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-
-  // Group by hour for readability
+  const timeline = buildTimeline(activities, screenshots);
   let currentHour = -1;
 
-  for (const entry of sorted) {
-    const hour = entry.timestamp.getHours();
+  for (const item of timeline) {
+    const hour = item.timestamp.getHours();
 
     if (hour !== currentHour) {
       if (currentHour !== -1) lines.push('');
-      lines.push(`---`);
+      lines.push('---');
       lines.push('');
       currentHour = hour;
     }
 
-    lines.push(`## [${formatTime(entry.timestamp)}] ${sourceLabel(entry)}`);
-    lines.push('');
-    lines.push(`- **${entry.eventType}**: ${entry.summary}`);
-    lines.push('');
+    if (item.kind === 'activity') {
+      renderActivity(item.data, lines);
+    } else {
+      renderScreenshot(item.data, lines);
+    }
   }
 
   // Summary section for NotebookLM / AI ingestion
@@ -62,26 +129,30 @@ export function buildMarkdown(entries: ActivityEntry[], range: DateRange): strin
   lines.push('## Summary');
   lines.push('');
 
-  const cwCount = entries.filter((e) => e.source === 'chatwork').length;
-  const ghCount = entries.filter((e) => e.source === 'github').length;
+  const cwCount = activities.filter((e) => e.source === 'chatwork').length;
+  const ghCount = activities.filter((e) => e.source === 'github').length;
+  const ssCount = screenshots.length;
+  const matchedCount = screenshots.filter((s) => s.matchedActivity !== undefined).length;
 
   lines.push(`- Chatwork messages: **${cwCount}**`);
   lines.push(`- GitHub events: **${ghCount}**`);
-  lines.push(`- Total activities: **${entries.length}**`);
+  if (ssCount > 0) {
+    lines.push(`- Screenshots: **${ssCount}** (${matchedCount} matched to activities)`);
+  }
+  lines.push(`- Total activities: **${activities.length + ssCount}**`);
   lines.push('');
 
-  // Repos / rooms touched
-  const repos = [...new Set(entries.filter((e) => e.source === 'github').map((e) => e.roomOrRepo))];
-  const cwRooms = [...new Set(entries.filter((e) => e.source === 'chatwork').map((e) => e.roomOrRepo))];
+  const repos = [...new Set(activities.filter((e) => e.source === 'github').map((e) => e.roomOrRepo))];
+  const cwRooms = [...new Set(activities.filter((e) => e.source === 'chatwork').map((e) => e.roomOrRepo))];
 
   if (repos.length > 0) {
-    lines.push(`### GitHub repositories`);
+    lines.push('### GitHub repositories');
     repos.forEach((r) => lines.push(`- ${r}`));
     lines.push('');
   }
 
   if (cwRooms.length > 0) {
-    lines.push(`### Chatwork rooms`);
+    lines.push('### Chatwork rooms');
     cwRooms.forEach((r) => lines.push(`- ${r}`));
     lines.push('');
   }

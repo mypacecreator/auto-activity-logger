@@ -2,8 +2,9 @@ import 'dotenv/config';
 import { program } from 'commander';
 import { fetchChatworkActivities } from './chatwork.js';
 import { fetchGitHubActivities } from './github.js';
+import { scanScreenshots } from './screenshot.js';
 import { buildMarkdown, saveMarkdown } from './formatter.js';
-import type { DateRange, DateTarget } from './types.js';
+import type { ActivityEntry, DateRange, DateTarget, ScreenshotEntry } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Config validation
@@ -57,12 +58,14 @@ async function main() {
     )
     .option('--no-chatwork', 'Skip Chatwork (useful when token is not yet configured)')
     .option('--no-github', 'Skip GitHub (useful when token is not yet configured)')
+    .option('--no-screenshots', 'Skip screenshot scanning')
     .parse();
 
   const opts = program.opts<{
     date: string;
     chatwork: boolean;
     github: boolean;
+    screenshots: boolean;
   }>();
 
   if (opts.date !== 'today' && opts.date !== 'yesterday') {
@@ -79,7 +82,7 @@ async function main() {
   console.log(`Output : ${outputDir}/${range.label}_activity.md`);
   console.log(`${'─'.repeat(40)}\n`);
 
-  const allEntries: Awaited<ReturnType<typeof fetchChatworkActivities>> = [];
+  const allActivities: ActivityEntry[] = [];
 
   // -------------------------------------------------------------------------
   // Chatwork
@@ -97,13 +100,13 @@ async function main() {
       : null;
 
     if (roomIds === null) {
-      console.log('  [Chatwork] No CHATWORK_ROOM_IDS set → fetching all rooms');
+      console.log('  [Chatwork] No CHATWORK_ROOM_IDS set → fetching all rooms (filtered by last_update_time)');
     } else {
       console.log(`  [Chatwork] Using ${roomIds.length} configured room(s)`);
     }
 
     const cwEntries = await fetchChatworkActivities(cwToken, cwAccountId, roomIds, range);
-    allEntries.push(...cwEntries);
+    allActivities.push(...cwEntries);
     console.log(`  [Chatwork] Done. ${cwEntries.length} activity entry(ies) collected.\n`);
   } else {
     console.log('  [Chatwork] Skipped (--no-chatwork)\n');
@@ -117,21 +120,35 @@ async function main() {
     const ghUsername = requireEnv('GITHUB_USERNAME');
 
     const ghEntries = await fetchGitHubActivities(ghToken, ghUsername, range);
-    allEntries.push(...ghEntries);
+    allActivities.push(...ghEntries);
     console.log(`  [GitHub] Done. ${ghEntries.length} activity entry(ies) collected.\n`);
   } else {
     console.log('  [GitHub] Skipped (--no-github)\n');
   }
 
   // -------------------------------------------------------------------------
+  // Screenshots
+  // -------------------------------------------------------------------------
+  let screenshots: ScreenshotEntry[] = [];
+
+  if (opts.screenshots) {
+    const screenshotDir = process.env.SCREENSHOT_DIR ?? '~/Downloads/CleanShot';
+    screenshots = scanScreenshots(screenshotDir, range, allActivities);
+    console.log(`  [Screenshot] Done. ${screenshots.length} screenshot(s) recorded.\n`);
+  } else {
+    console.log('  [Screenshot] Skipped (--no-screenshots)\n');
+  }
+
+  // -------------------------------------------------------------------------
   // Output
   // -------------------------------------------------------------------------
-  const markdown = buildMarkdown(allEntries, range);
+  const markdown = buildMarkdown(allActivities, range, screenshots);
   const savedPath = saveMarkdown(markdown, outputDir, range.label);
 
+  const total = allActivities.length + screenshots.length;
   console.log(`${'─'.repeat(40)}`);
   console.log(`✓ Saved: ${savedPath}`);
-  console.log(`  Total activities: ${allEntries.length}`);
+  console.log(`  Total entries: ${total} (activities: ${allActivities.length}, screenshots: ${screenshots.length})`);
   console.log(`${'─'.repeat(40)}\n`);
 }
 

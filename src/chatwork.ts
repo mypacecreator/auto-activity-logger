@@ -47,10 +47,22 @@ export async function fetchChatworkActivities(
   roomIds: number[] | null, // null = all rooms
   range: DateRange,
 ): Promise<ActivityEntry[]> {
-  const rooms: ChatworkRoom[] =
-    roomIds && roomIds.length > 0
-      ? roomIds.map((id) => ({ room_id: id, name: `Room ${id}`, type: 'group' as const }))
-      : await fetchMyRooms(apiToken);
+  let rooms: ChatworkRoom[];
+
+  if (roomIds && roomIds.length > 0) {
+    rooms = roomIds.map((id) => ({ room_id: id, name: `Room ${id}`, type: 'group' as const }));
+  } else {
+    rooms = await fetchMyRooms(apiToken);
+    // Filter out rooms with no activity on the target day using last_update_time
+    const startUnix = Math.floor(range.start.getTime() / 1000);
+    const totalRooms = rooms.length;
+    rooms = rooms.filter(
+      (r) => r.last_update_time === undefined || r.last_update_time >= startUnix,
+    );
+    console.log(
+      `  [Chatwork] ${totalRooms} rooms total → ${rooms.length} active on ${range.label}`,
+    );
+  }
 
   console.log(`  [Chatwork] Scanning ${rooms.length} room(s)…`);
 
