@@ -1,6 +1,6 @@
 # auto-activity-logger
 
-ChatworkとGitHubから「自分の行動ログだけ」を自動抽出し、Markdown形式で保存するCLIツール。
+Chatwork・GitHub・Gmailから「自分の行動ログだけ」を自動抽出し、Markdown形式で保存するCLIツール。
 チャット画面やGitHubのUIを開かずに、通知ノイズを受けることなく実績だけを記録できます。
 
 ---
@@ -9,6 +9,7 @@ ChatworkとGitHubから「自分の行動ログだけ」を自動抽出し、Mar
 
 - **Chatwork**: 指定ルーム（または全参加ルーム）から自分の発言のみを抽出
 - **GitHub**: Push / PR / Issue / Comment など主要イベントを時系列で記録
+- **Gmail**: 送信済み・返信メールを件名・宛先付きで記録（Google Workspace 対応）
 - **スクリーンショット連携**: CleanShot X のスクショをタイムスタンプで活動ログと突合し、文脈を推測
 - **ルーム自動絞り込み**: `last_update_time` を使い、対象日に更新のないルームをスキップ（API コール削減）
 - **NotebookLM / Gemini 対応構造**: 生成したMarkdownをAIに読み込ませて振り返りに活用できる形式
@@ -57,6 +58,47 @@ cp .env.example .env
    - `read:user` — パブリックイベントの取得
    - `repo` — プライベートリポジトリのイベントも取得する場合
 
+### Gmail（Google Workspace 管理者設定）
+
+Service Account + ドメイン全体委任を使います。初回のみ管理者コンソールでの設定が必要です。
+
+#### Step 1: Google Cloud Console でプロジェクトを準備する
+
+1. [Google Cloud Console](https://console.cloud.google.com/) を開く
+2. プロジェクトを作成（または既存プロジェクトを選択）
+3. 「APIとサービス」→「ライブラリ」から **Gmail API** を検索して有効化
+
+#### Step 2: サービスアカウントを作成する
+
+1. 「IAMと管理」→「サービスアカウント」→「サービスアカウントを作成」
+2. 名前を入力（例: `activity-logger`）して作成
+3. 作成したサービスアカウントの「キー」タブ →「鍵を追加」→「新しい鍵を作成」→「JSON」を選択
+4. ダウンロードした JSON ファイルをプロジェクト内の `credentials/service-account.json` に配置
+5. サービスアカウントの詳細画面に表示される**クライアントID**（数字の羅列）をメモしておく
+
+> `credentials/` ディレクトリは `.gitignore` 対象です。リポジトリに含まれません。
+
+#### Step 3: Workspace 管理コンソールでドメイン全体委任を付与する
+
+1. [Google Workspace 管理コンソール](https://admin.google.com/) を開く
+2. 「セキュリティ」→「アクセスとデータ管理」→「APIの制御」→「ドメイン全体の委任を管理」
+3. 「新しく追加」をクリック
+4. 「クライアントID」に Step 2 でメモした番号を入力
+5. 「OAuthスコープ」に以下を入力：
+   ```
+   https://www.googleapis.com/auth/gmail.readonly
+   ```
+6. 「承認」をクリック
+
+> 委任が反映されるまで数分かかる場合があります。
+
+#### Step 4: .env に設定を追加する
+
+```dotenv
+GOOGLE_SERVICE_ACCOUNT_KEY_PATH=./credentials/service-account.json
+GMAIL_ADDRESS=you@yourcompany.com
+```
+
 ---
 
 ## 環境変数一覧
@@ -70,6 +112,8 @@ cp .env.example .env
 | `CHATWORK_ROOM_IDS` | | 空（全ルーム） | 対象ルームID（カンマ区切り: `12345,67890`）。空の場合は全参加ルームを走査 |
 | `GITHUB_TOKEN` | ◎ | — | GitHub Personal Access Token |
 | `GITHUB_USERNAME` | ◎ | — | GitHub ユーザー名 |
+| `GOOGLE_SERVICE_ACCOUNT_KEY_PATH` | | `./credentials/service-account.json` | Service Account JSON キーのパス |
+| `GMAIL_ADDRESS` | △ | — | 取得対象の Gmail アドレス（`--no-gmail` 時は不要） |
 | `DEFAULT_DATE` | | `yesterday` | デフォルトの取得日。`today` または `yesterday` |
 | `OUTPUT_DIR` | | `logs` | Markdown の出力先ディレクトリ（プロジェクトルートからの相対パス） |
 | `SCREENSHOT_DIR` | | `~/Downloads/CleanShot` | CleanShot X のスクリーンショット保存先 |
@@ -109,8 +153,11 @@ npm start -- --no-chatwork
 # Chatwork のみ（GitHub をスキップ）
 npm start -- --no-github
 
+# Gmail をスキップ（まだ設定していない場合）
+npm start -- --no-gmail
+
 # スクリーンショットのみ確認
-npm start -- --no-chatwork --no-github
+npm start -- --no-chatwork --no-github --no-gmail
 ```
 
 ### オプション一覧
@@ -120,6 +167,7 @@ npm start -- --no-chatwork --no-github
 | `--date <today\|yesterday>` | 取得する日付。未指定時は `DEFAULT_DATE` の値を使用 |
 | `--no-chatwork` | Chatwork の取得をスキップ |
 | `--no-github` | GitHub の取得をスキップ |
+| `--no-gmail` | Gmail の取得をスキップ |
 | `--no-screenshots` | スクリーンショットスキャンをスキップ |
 
 ---
@@ -219,6 +267,97 @@ CleanShot 2026-03-04 at 23.30.00.png
 
 ---
 
+## ログの活用方法（業務時間分析）
+
+このツールが出力するMarkdownは、**各エントリのタイムスタンプ差分**が作業時間の代理指標になります。
+AIに読み込ませることで、手動集計なしに「どのタスクに何分使ったか」を推定できます。
+
+### 1. AI へのプロンプト例
+
+生成された `logs/YYYY-MM-DD_activity.md` をそのままコピーして、以下のプロンプトと一緒に Gemini / Claude / ChatGPT に貼り付けます。
+
+**タスク別作業時間の推定：**
+
+```
+以下は私の1日の行動ログです（[HH:mm] 形式のタイムスタンプ付き）。
+連続するエントリ間の時間差を「そのタスクへの作業時間」として推定し、
+Chatworkルーム・GitHubリポジトリ単位でまとめてください。
+
+出力形式：
+| タスク | 推定作業時間 | 主な活動内容 |
+|---|---|---|
+
+--- ログここから ---
+（ファイル内容を貼り付け）
+```
+
+**午前・午後のパターン分析：**
+
+```
+以下の行動ログから：
+1. 午前（〜12時）と午後（12時〜）それぞれの主な作業内容
+2. GitHub コミットが集中している「深作業」時間帯
+3. Chatwork 発言が多い「コミュニケーション」時間帯
+を分析してください。
+
+--- ログここから ---
+（ファイル内容を貼り付け）
+```
+
+**週次振り返り（複数日分）：**
+
+```bash
+# 1週間分のログを結合してからAIに投げる
+cat logs/2026-03-0*.md >> logs/week_2026-W10.md
+```
+
+```
+以下は1週間分の行動ログです。
+1. 案件・リポジトリ別の合計推定作業時間（日ごとの内訳つき）
+2. 最も時間を使った上位3タスク
+3. 来週改善できそうな点
+
+--- ログここから ---
+（結合ファイルの内容を貼り付け）
+```
+
+### 2. NotebookLM での活用
+
+1. [NotebookLM](https://notebooklm.google.com/) を開く
+2. 「＋ ソースを追加」→「ファイルをアップロード」で `logs/` フォルダ内の `.md` ファイルを追加
+3. チャット欄で以下のように質問する：
+
+```
+先週のログから、案件Aに費やした推定時間を日別で教えてください。
+```
+
+```
+GitHubへのコミットが最も多かった日はいつですか？その日の作業内容を要約してください。
+```
+
+複数日分のファイルを一度にアップロードすれば、**期間をまたいだ傾向分析**も可能です。
+
+### 3. cron で毎日自動生成
+
+ログを蓄積しておくと振り返りの精度が上がります。毎朝決まった時刻に自動実行する設定例：
+
+```bash
+# crontab -e で以下を追加
+# 毎朝 9:00 に前日分を自動生成
+0 9 * * 1-5 cd /path/to/auto-activity-logger && npm start >> ~/auto-activity-logger-cron.log 2>&1
+```
+
+### 4. 分析精度を上げるコツ
+
+| 工夫 | 効果 |
+|---|---|
+| Chatwork の発言に作業内容を書き残す習慣をつける | AI の推定精度が上がる |
+| コミットメッセージを `feat:` / `fix:` などの prefix で統一する | タスク種別の自動分類がしやすくなる |
+| スクリーンショット機能を有効にする | 「何を見ながら作業していたか」の文脈が補完される |
+| `CHATWORK_ROOM_IDS` で案件ルームを絞り込む | 関係ないルームのノイズが減り分析精度が上がる |
+
+---
+
 ## ファイル構成
 
 ```
@@ -227,12 +366,15 @@ auto-activity-logger/
 ├── .gitignore
 ├── package.json
 ├── tsconfig.json
+├── credentials/          # Service Account JSON キー置き場（.gitignore 対象）
+│   └── service-account.json
 ├── logs/                 # 出力先（.gitignore 対象）
 │   └── YYYY-MM-DD_activity.md
 └── src/
     ├── index.ts          # CLIエントリーポイント・オプション処理
     ├── chatwork.ts       # Chatwork API クライアント
     ├── github.ts         # GitHub API クライアント
+    ├── gmail.ts          # Gmail API クライアント（Service Account）
     ├── screenshot.ts     # スクリーンショットスキャン・突合
     ├── formatter.ts      # Markdown 生成・ファイル保存
     └── types.ts          # 共通型定義

@@ -20,6 +20,8 @@ function activitySourceLabel(entry: ActivityEntry): string {
       return `💬 Chatwork (${entry.roomOrRepo})`;
     case 'github':
       return `🐙 GitHub (${entry.roomOrRepo})`;
+    case 'gmail':
+      return `✉️ Gmail (${entry.roomOrRepo})`;
   }
 }
 
@@ -62,11 +64,7 @@ function renderScreenshot(entry: ScreenshotEntry, lines: string[]): void {
     lines.push('');
     lines.push(`- **Screenshot:** ${entry.filename}`);
 
-    if (matched.source === 'chatwork') {
-      lines.push(`- **Chatwork (${matched.roomOrRepo}):** ${matched.summary}`);
-    } else {
-      lines.push(`- **GitHub (${matched.roomOrRepo}):** ${matched.summary}`);
-    }
+    lines.push(`- **${activitySourceLabel(matched)}:** ${matched.summary}`);
 
     if (entry.inference) {
       lines.push(`- **推測:** ${entry.inference}`);
@@ -131,11 +129,13 @@ export function buildMarkdown(
 
   const cwCount = activities.filter((e) => e.source === 'chatwork').length;
   const ghCount = activities.filter((e) => e.source === 'github').length;
+  const gmailCount = activities.filter((e) => e.source === 'gmail').length;
   const ssCount = screenshots.length;
   const matchedCount = screenshots.filter((s) => s.matchedActivity !== undefined).length;
 
   lines.push(`- Chatwork messages: **${cwCount}**`);
   lines.push(`- GitHub events: **${ghCount}**`);
+  if (gmailCount > 0) lines.push(`- Gmail sent: **${gmailCount}**`);
   if (ssCount > 0) {
     lines.push(`- Screenshots: **${ssCount}** (${matchedCount} matched to activities)`);
   }
