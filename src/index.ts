@@ -12,7 +12,7 @@ if (process.env.TIMEZONE) {
 import { program } from 'commander';
 import { fetchChatworkActivities } from './chatwork.js';
 import { fetchGitHubActivities } from './github.js';
-import { fetchGmailActivities } from './gmail.js';
+import { fetchGmailActivities, fetchGmailLabelActivities } from './gmail.js';
 import { scanScreenshots } from './screenshot.js';
 import { buildMarkdown, saveMarkdown } from './formatter.js';
 import type { ActivityEntry, DateRange, DateTarget, ScreenshotEntry } from './types.js';
@@ -157,7 +157,19 @@ async function main() {
 
     const gmailEntries = await fetchGmailActivities(keyPath, gmailAddress, range);
     allActivities.push(...gmailEntries);
-    console.log(`  [Gmail] Done. ${gmailEntries.length} sent message(s) collected.\n`);
+    console.log(`  [Gmail] ${gmailEntries.length} sent message(s) collected.`);
+
+    const watchedLabels = (process.env.GMAIL_WATCHED_LABELS ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (watchedLabels.length > 0) {
+      const labelEntries = await fetchGmailLabelActivities(keyPath, gmailAddress, range, watchedLabels);
+      allActivities.push(...labelEntries);
+      console.log(`  [Gmail] ${labelEntries.length} label message(s) collected.`);
+    }
+
+    console.log(`  [Gmail] Done.\n`);
   } else {
     console.log('  [Gmail] Skipped (--no-gmail)\n');
   }

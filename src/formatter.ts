@@ -129,13 +129,15 @@ export function buildMarkdown(
 
   const cwCount = activities.filter((e) => e.source === 'chatwork').length;
   const ghCount = activities.filter((e) => e.source === 'github').length;
-  const gmailCount = activities.filter((e) => e.source === 'gmail').length;
+  const gmailSentCount = activities.filter((e) => e.source === 'gmail' && e.eventType !== 'Received').length;
+  const gmailReceivedCount = activities.filter((e) => e.source === 'gmail' && e.eventType === 'Received').length;
   const ssCount = screenshots.length;
   const matchedCount = screenshots.filter((s) => s.matchedActivity !== undefined).length;
 
   lines.push(`- Chatwork messages: **${cwCount}**`);
   lines.push(`- GitHub events: **${ghCount}**`);
-  if (gmailCount > 0) lines.push(`- Gmail sent: **${gmailCount}**`);
+  if (gmailSentCount > 0) lines.push(`- Gmail sent: **${gmailSentCount}**`);
+  if (gmailReceivedCount > 0) lines.push(`- Gmail received (label): **${gmailReceivedCount}**`);
   if (ssCount > 0) {
     lines.push(`- Screenshots: **${ssCount}** (${matchedCount} matched to activities)`);
   }
