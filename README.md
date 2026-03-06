@@ -203,6 +203,10 @@ npm start -- --no-chatwork --no-github --no-gmail
 
 ---
 
+## [09:15] ✉️ Gmail (GroupwareNotif)
+
+- **Received**: 【承認依頼】経費申請 #1234
+
 ## [10:30] 💬 Chatwork (案件Aチャンネル)
 
 - **Message**: ここのマージン、あと5px詰めてください…
@@ -213,11 +217,7 @@ npm start -- --no-chatwork --no-github --no-gmail
 - **Chatwork (案件Aチャンネル):** ここのマージン、あと5px詰めて…
 - **推測:** 指示出しまたはメッセージの参照資料
 
-## [09:15] 📧 Gmail (GroupwareNotif)
-
-- **Received**: 【承認依頼】経費申請 #1234
-
-## [11:45] 📧 Gmail → colleague@yourcompany.com
+## [11:45] ✉️ Gmail (colleague@yourcompany.com)
 
 - **New thread**: 週次定例の議事録共有
 
@@ -231,7 +231,8 @@ npm start -- --no-chatwork --no-github --no-gmail
 
 - Chatwork messages: **3**
 - GitHub events: **5**
-- Gmail messages: **3** (1 sent, 2 received)
+- Gmail sent: **1**
+- Gmail received (label): **2**
 - Screenshots: **2** (2 matched to activities)
 - Total activities: **13**
 
