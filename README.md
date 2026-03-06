@@ -195,7 +195,7 @@ npm start -- --no-chatwork --no-github --no-gmail
 - **Chatwork (案件Aチャンネル):** ここのマージン、あと5px詰めて…
 - **推測:** 指示出しまたはメッセージの参照資料
 
-## [14:15] GitHub (owner/repo)
+## [14:15] 🐙 GitHub (owner/repo)
 
 - **PushEvent**: Push: fix: ログ出力のフォーマット修正 (+2 more)
 

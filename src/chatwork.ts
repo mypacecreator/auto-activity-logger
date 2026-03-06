@@ -1,26 +1,24 @@
-import axios from 'axios';
+import axios, { type AxiosInstance } from 'axios';
 import type { ActivityEntry, ChatworkMessage, ChatworkRoom, DateRange } from './types.js';
 
 const BASE_URL = 'https://api.chatwork.com/v2';
 
-function createClient(apiToken: string) {
+function createClient(apiToken: string): AxiosInstance {
   return axios.create({
     baseURL: BASE_URL,
     headers: { 'X-ChatWorkToken': apiToken },
   });
 }
 
-async function fetchMyRooms(apiToken: string): Promise<ChatworkRoom[]> {
-  const client = createClient(apiToken);
+async function fetchMyRooms(client: AxiosInstance): Promise<ChatworkRoom[]> {
   const res = await client.get<ChatworkRoom[]>('/rooms');
   return res.data;
 }
 
 async function fetchMessagesFromRoom(
-  apiToken: string,
+  client: AxiosInstance,
   roomId: number,
 ): Promise<ChatworkMessage[]> {
-  const client = createClient(apiToken);
   // force=1 to fetch all messages (not just unread)
   const res = await client.get<ChatworkMessage[]>(`/rooms/${roomId}/messages`, {
     params: { force: 1 },
@@ -47,12 +45,13 @@ export async function fetchChatworkActivities(
   roomIds: number[] | null, // null = all rooms
   range: DateRange,
 ): Promise<ActivityEntry[]> {
+  const client = createClient(apiToken);
   let rooms: ChatworkRoom[];
 
   if (roomIds && roomIds.length > 0) {
     rooms = roomIds.map((id) => ({ room_id: id, name: `Room ${id}`, type: 'group' as const }));
   } else {
-    rooms = await fetchMyRooms(apiToken);
+    rooms = await fetchMyRooms(client);
     // Filter out rooms with no activity on the target day using last_update_time
     const startUnix = Math.floor(range.start.getTime() / 1000);
     const totalRooms = rooms.length;
@@ -71,7 +70,7 @@ export async function fetchChatworkActivities(
   for (const room of rooms) {
     process.stdout.write(`    → ${room.name || room.room_id}… `);
     try {
-      const messages = await fetchMessagesFromRoom(apiToken, room.room_id);
+      const messages = await fetchMessagesFromRoom(client, room.room_id);
 
       const mine = messages.filter((msg) => {
         if (msg.account.account_id !== myAccountId) return false;

@@ -15,7 +15,11 @@ function createClient(token: string) {
   });
 }
 
-async function fetchAllEvents(token: string, username: string): Promise<GitHubEvent[]> {
+async function fetchAllEvents(
+  token: string,
+  username: string,
+  rangeStart: Date,
+): Promise<GitHubEvent[]> {
   const client = createClient(token);
   const events: GitHubEvent[] = [];
 
@@ -25,6 +29,11 @@ async function fetchAllEvents(token: string, username: string): Promise<GitHubEv
     });
     if (res.data.length === 0) break;
     events.push(...res.data);
+
+    // GitHub returns events in reverse-chronological order; once the oldest
+    // event on this page predates the range start, subsequent pages will too.
+    const oldest = res.data[res.data.length - 1];
+    if (new Date(oldest.created_at) < rangeStart) break;
   }
 
   return events;
@@ -111,7 +120,7 @@ export async function fetchGitHubActivities(
 ): Promise<ActivityEntry[]> {
   console.log(`  [GitHub] Fetching events for @${username}…`);
 
-  const allEvents = await fetchAllEvents(token, username);
+  const allEvents = await fetchAllEvents(token, username, range.start);
 
   const inRange = allEvents.filter((e) => {
     const ts = new Date(e.created_at);
