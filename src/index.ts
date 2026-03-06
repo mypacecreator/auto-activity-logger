@@ -1,4 +1,10 @@
 import 'dotenv/config';
+
+// Set timezone before any Date operations so local date methods reflect the configured zone
+if (process.env.TIMEZONE) {
+  process.env.TZ = process.env.TIMEZONE;
+}
+
 import { program } from 'commander';
 import { fetchChatworkActivities } from './chatwork.js';
 import { fetchGitHubActivities } from './github.js';
@@ -40,7 +46,11 @@ function buildDateRange(target: DateTarget): DateRange {
     end = today;
   }
 
-  const label = start.toISOString().slice(0, 10); // "YYYY-MM-DD"
+  // Use local date parts (TZ-aware) instead of toISOString() which always outputs UTC
+  const y = start.getFullYear();
+  const m = String(start.getMonth() + 1).padStart(2, '0');
+  const d = String(start.getDate()).padStart(2, '0');
+  const label = `${y}-${m}-${d}`;
   return { start, end, label };
 }
 
@@ -81,6 +91,7 @@ async function main() {
 
   console.log(`\nauto-activity-logger`);
   console.log(`${'─'.repeat(40)}`);
+  console.log(`Timezone: ${process.env.TIMEZONE ?? '(system default)'}`);
   console.log(`Date   : ${range.label} (${range.start.toISOString()} – ${range.end.toISOString()})`);
   console.log(`Output : ${outputDir}/${range.label}_activity.md`);
   console.log(`${'─'.repeat(40)}\n`);
