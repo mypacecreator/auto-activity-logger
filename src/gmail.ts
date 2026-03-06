@@ -147,7 +147,7 @@ export async function fetchGmailLabelActivities(
   for (const label of labels) {
     console.log(`  [Gmail] Fetching label "${label}" messages…`);
 
-    const query = `label:${label} after:${toGmailDate(range.start)} before:${toGmailDate(range.end)}`;
+    const query = `label:"${label}" -in:sent after:${toGmailDate(range.start)} before:${toGmailDate(range.end)}`;
 
     const listRes = await gmail.users.messages.list({
       userId: 'me',
@@ -157,6 +157,9 @@ export async function fetchGmailLabelActivities(
 
     const messages = listRes.data.messages ?? [];
     console.log(`  [Gmail] ${messages.length} message(s) found in label "${label}"`);
+    if (messages.length >= 200) {
+      console.warn(`  [Gmail] ⚠ label "${label}": 200件上限に達しました。ページネーション未対応のため件数が不足している可能性があります。`);
+    }
 
     for (const msg of messages) {
       if (!msg.id) continue;

@@ -114,6 +114,7 @@ GMAIL_ADDRESS=you@yourcompany.com
 | `GITHUB_USERNAME` | ◎ | — | GitHub ユーザー名 |
 | `GOOGLE_SERVICE_ACCOUNT_KEY_PATH` | | `./credentials/service-account.json` | Service Account JSON キーのパス |
 | `GMAIL_ADDRESS` | △ | — | 取得対象の Gmail アドレス（`--no-gmail` 時は不要） |
+| `GMAIL_WATCHED_LABELS` | | 空（無効） | 受信ログの対象ラベル（カンマ区切り: `GroupwareNotif,TeamUpdates`）。空の場合はラベル監視を行わない |
 | `DEFAULT_DATE` | | `yesterday` | デフォルトの取得日。`today` または `yesterday` |
 | `OUTPUT_DIR` | | `logs` | Markdown の出力先ディレクトリ（プロジェクトルートからの相対パス） |
 | `SCREENSHOT_DIR` | | `~/Downloads/CleanShot` | CleanShot X のスクリーンショット保存先 |
