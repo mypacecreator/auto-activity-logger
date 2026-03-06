@@ -64,11 +64,7 @@ function renderScreenshot(entry: ScreenshotEntry, lines: string[]): void {
     lines.push('');
     lines.push(`- **Screenshot:** ${entry.filename}`);
 
-    if (matched.source === 'chatwork') {
-      lines.push(`- **Chatwork (${matched.roomOrRepo}):** ${matched.summary}`);
-    } else {
-      lines.push(`- **GitHub (${matched.roomOrRepo}):** ${matched.summary}`);
-    }
+    lines.push(`- **${activitySourceLabel(matched)}:** ${matched.summary}`);
 
     if (entry.inference) {
       lines.push(`- **推測:** ${entry.inference}`);

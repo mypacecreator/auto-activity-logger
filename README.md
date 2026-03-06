@@ -1,6 +1,6 @@
 # auto-activity-logger
 
-ChatworkとGitHubから「自分の行動ログだけ」を自動抽出し、Markdown形式で保存するCLIツール。
+Chatwork・GitHub・Gmailから「自分の行動ログだけ」を自動抽出し、Markdown形式で保存するCLIツール。
 チャット画面やGitHubのUIを開かずに、通知ノイズを受けることなく実績だけを記録できます。
 
 ---

@@ -46,10 +46,20 @@ function getHeader(
 }
 
 function parseToRecipients(toHeader: string): string {
-  // "Alice <alice@example.com>, Bob <bob@example.com>" → "alice@example.com (+1)"
-  const parts = toHeader.split(',').map((s) => s.trim());
-  const first = parts[0].replace(/^.*<(.+)>$/, '$1').trim() || parts[0];
-  if (parts.length === 1) return first;
+  // Split on commas outside quoted strings (RFC 5322)
+  // e.g. "Smith, John" <j@ex.com>, Bob <b@ex.com> → 2 parts
+  const parts: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  for (const ch of toHeader) {
+    if (ch === '"') { inQuotes = !inQuotes; current += ch; }
+    else if (ch === ',' && !inQuotes) { parts.push(current.trim()); current = ''; }
+    else { current += ch; }
+  }
+  if (current.trim()) parts.push(current.trim());
+
+  const first = parts[0]?.replace(/^.*<(.+)>$/, '$1').trim() || parts[0] || '';
+  if (parts.length <= 1) return first;
   return `${first} (+${parts.length - 1})`;
 }
 
