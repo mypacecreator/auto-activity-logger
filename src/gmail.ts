@@ -134,3 +134,64 @@ export async function fetchGmailActivities(
 
   return entries;
 }
+
+export async function fetchGmailLabelActivities(
+  keyFilePath: string,
+  gmailAddress: string,
+  range: DateRange,
+  labels: string[],
+): Promise<ActivityEntry[]> {
+  const gmail = createGmailClient(keyFilePath, gmailAddress);
+  const entries: ActivityEntry[] = [];
+
+  for (const label of labels) {
+    console.log(`  [Gmail] Fetching label "${label}" messages…`);
+
+    const query = `label:"${label}" -in:sent after:${toGmailDate(range.start)} before:${toGmailDate(range.end)}`;
+
+    const listRes = await gmail.users.messages.list({
+      userId: 'me',
+      q: query,
+      maxResults: 200,
+    });
+
+    const messages = listRes.data.messages ?? [];
+    console.log(`  [Gmail] ${messages.length} message(s) found in label "${label}"`);
+    if (messages.length >= 200) {
+      console.warn(`  [Gmail] ⚠ label "${label}": 200件上限に達しました。ページネーション未対応のため件数が不足している可能性があります。`);
+    }
+
+    for (const msg of messages) {
+      if (!msg.id) continue;
+
+      const detail = await gmail.users.messages.get({
+        userId: 'me',
+        id: msg.id,
+        format: 'metadata',
+        metadataHeaders: ['Date', 'Subject', 'From'],
+      });
+
+      const headers = detail.data.payload?.headers ?? [];
+      const dateStr = getHeader(headers, 'Date');
+      const subject = getHeader(headers, 'Subject');
+      const snippet = detail.data.snippet ?? '';
+
+      const timestamp = dateStr ? new Date(dateStr) : new Date();
+
+      // Filter strictly by timestamp (Gmail's date query rounds to day boundaries)
+      if (timestamp < range.start || timestamp >= range.end) continue;
+
+      entries.push({
+        source: 'gmail',
+        timestamp,
+        roomOrRepo: label,
+        eventType: 'Received',
+        summary: buildSummary(subject, snippet),
+      });
+    }
+  }
+
+  entries.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+
+  return entries;
+}
