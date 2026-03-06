@@ -40,9 +40,9 @@ function buildDateRange(target: DateTarget): DateRange {
 
   if (target === 'today') {
     start = today;
-    end = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+    end = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
   } else {
-    start = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+    start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
     end = today;
   }
 
