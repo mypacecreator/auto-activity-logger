@@ -3,6 +3,10 @@ import 'dotenv/config';
 // Set timezone before any Date operations so local date methods reflect the configured zone
 if (process.env.TIMEZONE) {
   process.env.TZ = process.env.TIMEZONE;
+  const effective = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (effective !== process.env.TIMEZONE) {
+    console.warn(`[WARN] TIMEZONE "${process.env.TIMEZONE}" is not recognized. Using "${effective}" instead.`);
+  }
 }
 
 import { program } from 'commander';
@@ -91,7 +95,7 @@ async function main() {
 
   console.log(`\nauto-activity-logger`);
   console.log(`${'─'.repeat(40)}`);
-  console.log(`Timezone: ${process.env.TIMEZONE ?? '(system default)'}`);
+  console.log(`Timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}`);
   console.log(`Date   : ${range.label} (${range.start.toISOString()} – ${range.end.toISOString()})`);
   console.log(`Output : ${outputDir}/${range.label}_activity.md`);
   console.log(`${'─'.repeat(40)}\n`);
