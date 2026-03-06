@@ -9,6 +9,7 @@ ChatworkとGitHubから「自分の行動ログだけ」を自動抽出し、Mar
 
 - **Chatwork**: 指定ルーム（または全参加ルーム）から自分の発言のみを抽出
 - **GitHub**: Push / PR / Issue / Comment など主要イベントを時系列で記録
+- **Gmail**: 送信済み・返信メールを件名・宛先付きで記録（Google Workspace 対応）
 - **スクリーンショット連携**: CleanShot X のスクショをタイムスタンプで活動ログと突合し、文脈を推測
 - **ルーム自動絞り込み**: `last_update_time` を使い、対象日に更新のないルームをスキップ（API コール削減）
 - **NotebookLM / Gemini 対応構造**: 生成したMarkdownをAIに読み込ませて振り返りに活用できる形式
@@ -57,6 +58,47 @@ cp .env.example .env
    - `read:user` — パブリックイベントの取得
    - `repo` — プライベートリポジトリのイベントも取得する場合
 
+### Gmail（Google Workspace 管理者設定）
+
+Service Account + ドメイン全体委任を使います。初回のみ管理者コンソールでの設定が必要です。
+
+#### Step 1: Google Cloud Console でプロジェクトを準備する
+
+1. [Google Cloud Console](https://console.cloud.google.com/) を開く
+2. プロジェクトを作成（または既存プロジェクトを選択）
+3. 「APIとサービス」→「ライブラリ」から **Gmail API** を検索して有効化
+
+#### Step 2: サービスアカウントを作成する
+
+1. 「IAMと管理」→「サービスアカウント」→「サービスアカウントを作成」
+2. 名前を入力（例: `activity-logger`）して作成
+3. 作成したサービスアカウントの「キー」タブ →「鍵を追加」→「新しい鍵を作成」→「JSON」を選択
+4. ダウンロードした JSON ファイルをプロジェクト内の `credentials/service-account.json` に配置
+5. サービスアカウントの詳細画面に表示される**クライアントID**（数字の羅列）をメモしておく
+
+> `credentials/` ディレクトリは `.gitignore` 対象です。リポジトリに含まれません。
+
+#### Step 3: Workspace 管理コンソールでドメイン全体委任を付与する
+
+1. [Google Workspace 管理コンソール](https://admin.google.com/) を開く
+2. 「セキュリティ」→「アクセスとデータ管理」→「APIの制御」→「ドメイン全体の委任を管理」
+3. 「新しく追加」をクリック
+4. 「クライアントID」に Step 2 でメモした番号を入力
+5. 「OAuthスコープ」に以下を入力：
+   ```
+   https://www.googleapis.com/auth/gmail.readonly
+   ```
+6. 「承認」をクリック
+
+> 委任が反映されるまで数分かかる場合があります。
+
+#### Step 4: .env に設定を追加する
+
+```dotenv
+GOOGLE_SERVICE_ACCOUNT_KEY_PATH=./credentials/service-account.json
+GMAIL_ADDRESS=you@yourcompany.com
+```
+
 ---
 
 ## 環境変数一覧
@@ -70,6 +112,8 @@ cp .env.example .env
 | `CHATWORK_ROOM_IDS` | | 空（全ルーム） | 対象ルームID（カンマ区切り: `12345,67890`）。空の場合は全参加ルームを走査 |
 | `GITHUB_TOKEN` | ◎ | — | GitHub Personal Access Token |
 | `GITHUB_USERNAME` | ◎ | — | GitHub ユーザー名 |
+| `GOOGLE_SERVICE_ACCOUNT_KEY_PATH` | | `./credentials/service-account.json` | Service Account JSON キーのパス |
+| `GMAIL_ADDRESS` | △ | — | 取得対象の Gmail アドレス（`--no-gmail` 時は不要） |
 | `DEFAULT_DATE` | | `yesterday` | デフォルトの取得日。`today` または `yesterday` |
 | `OUTPUT_DIR` | | `logs` | Markdown の出力先ディレクトリ（プロジェクトルートからの相対パス） |
 | `SCREENSHOT_DIR` | | `~/Downloads/CleanShot` | CleanShot X のスクリーンショット保存先 |
@@ -109,8 +153,11 @@ npm start -- --no-chatwork
 # Chatwork のみ（GitHub をスキップ）
 npm start -- --no-github
 
+# Gmail をスキップ（まだ設定していない場合）
+npm start -- --no-gmail
+
 # スクリーンショットのみ確認
-npm start -- --no-chatwork --no-github
+npm start -- --no-chatwork --no-github --no-gmail
 ```
 
 ### オプション一覧
@@ -120,6 +167,7 @@ npm start -- --no-chatwork --no-github
 | `--date <today\|yesterday>` | 取得する日付。未指定時は `DEFAULT_DATE` の値を使用 |
 | `--no-chatwork` | Chatwork の取得をスキップ |
 | `--no-github` | GitHub の取得をスキップ |
+| `--no-gmail` | Gmail の取得をスキップ |
 | `--no-screenshots` | スクリーンショットスキャンをスキップ |
 
 ---
@@ -318,12 +366,15 @@ auto-activity-logger/
 ├── .gitignore
 ├── package.json
 ├── tsconfig.json
+├── credentials/          # Service Account JSON キー置き場（.gitignore 対象）
+│   └── service-account.json
 ├── logs/                 # 出力先（.gitignore 対象）
 │   └── YYYY-MM-DD_activity.md
 └── src/
     ├── index.ts          # CLIエントリーポイント・オプション処理
     ├── chatwork.ts       # Chatwork API クライアント
     ├── github.ts         # GitHub API クライアント
+    ├── gmail.ts          # Gmail API クライアント（Service Account）
     ├── screenshot.ts     # スクリーンショットスキャン・突合
     ├── formatter.ts      # Markdown 生成・ファイル保存
     └── types.ts          # 共通型定義

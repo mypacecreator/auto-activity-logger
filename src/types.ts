@@ -65,7 +65,7 @@ export interface GitHubEvent {
 // Unified activity entry (used by formatter)
 // -----------------------------------------------------------------------------
 
-export type ActivitySource = 'chatwork' | 'github';
+export type ActivitySource = 'chatwork' | 'github' | 'gmail';
 
 export interface ActivityEntry {
   source: ActivitySource;

@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { program } from 'commander';
 import { fetchChatworkActivities } from './chatwork.js';
 import { fetchGitHubActivities } from './github.js';
+import { fetchGmailActivities } from './gmail.js';
 import { scanScreenshots } from './screenshot.js';
 import { buildMarkdown, saveMarkdown } from './formatter.js';
 import type { ActivityEntry, DateRange, DateTarget, ScreenshotEntry } from './types.js';
@@ -58,6 +59,7 @@ async function main() {
     )
     .option('--no-chatwork', 'Skip Chatwork (useful when token is not yet configured)')
     .option('--no-github', 'Skip GitHub (useful when token is not yet configured)')
+    .option('--no-gmail', 'Skip Gmail (useful when credentials are not yet configured)')
     .option('--no-screenshots', 'Skip screenshot scanning')
     .parse();
 
@@ -65,6 +67,7 @@ async function main() {
     date: string;
     chatwork: boolean;
     github: boolean;
+    gmail: boolean;
     screenshots: boolean;
   }>();
 
@@ -124,6 +127,20 @@ async function main() {
     console.log(`  [GitHub] Done. ${ghEntries.length} activity entry(ies) collected.\n`);
   } else {
     console.log('  [GitHub] Skipped (--no-github)\n');
+  }
+
+  // -------------------------------------------------------------------------
+  // Gmail
+  // -------------------------------------------------------------------------
+  if (opts.gmail) {
+    const keyPath = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH ?? './credentials/service-account.json';
+    const gmailAddress = requireEnv('GMAIL_ADDRESS');
+
+    const gmailEntries = await fetchGmailActivities(keyPath, gmailAddress, range);
+    allActivities.push(...gmailEntries);
+    console.log(`  [Gmail] Done. ${gmailEntries.length} sent message(s) collected.\n`);
+  } else {
+    console.log('  [Gmail] Skipped (--no-gmail)\n');
   }
 
   // -------------------------------------------------------------------------
