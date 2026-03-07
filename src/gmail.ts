@@ -75,11 +75,6 @@ function extractPlainText(payload: gmail_v1.Schema$MessagePart): string {
   return '';
 }
 
-function extractAfterMarker(body: string, marker: string): string | null {
-  const idx = body.indexOf(marker);
-  if (idx === -1) return null;
-  return body.slice(idx + marker.length).trim();
-}
 
 function buildSummary(subject: string, snippet: string): string {
   const sub = subject ? `[${subject}] ` : '';
@@ -158,6 +153,8 @@ export async function fetchGmailLabelActivities(
   gmailAddress: string,
   range: DateRange,
   labels: string[],
+  selfName?: string,
+  gsLabels?: string[],
 ): Promise<ActivityEntry[]> {
   const gmail = createGmailClient(keyFilePath, gmailAddress);
   const entries: ActivityEntry[] = [];
@@ -192,7 +189,20 @@ export async function fetchGmailLabelActivities(
       const dateStr = getHeader(headers, 'Date');
       const subject = getHeader(headers, 'Subject');
       const body = detail.data.payload ? extractPlainText(detail.data.payload) : '';
-      const content = extractAfterMarker(body, '◆内容') ?? '';
+
+      // Split on ◆内容 marker: header part (before) and content (after)
+      const markerIdx = body.indexOf('◆内容');
+      const headerPart = markerIdx !== -1 ? body.slice(0, markerIdx) : body;
+      const content = markerIdx !== -1 ? body.slice(markerIdx + '◆内容'.length).trim() : '';
+
+      // Poster filter: if selfName + gsLabels are configured and this label matches,
+      // skip messages where the ┏━...┗━ box (poster info) does not contain selfName.
+      // The box is searched instead of the full header to avoid false-matching
+      // "宛先: 自分名" which always appears in GroupSession notification emails.
+      if (selfName && gsLabels?.includes(label)) {
+        const boxMatch = headerPart.match(/┏━[\s\S]*?┗━/);
+        if (!boxMatch || !boxMatch[0].includes(selfName)) continue;
+      }
 
       const timestamp = dateStr ? new Date(dateStr) : new Date();
 

@@ -132,6 +132,8 @@ GMAIL_WATCHED_LABELS=GS_log
 | `GOOGLE_SERVICE_ACCOUNT_KEY_PATH` | | `./credentials/service-account.json` | Service Account JSON キーのパス |
 | `GMAIL_ADDRESS` | △ | — | 取得対象の Gmail アドレス（`--no-gmail` 時は不要） |
 | `GMAIL_WATCHED_LABELS` | | 空（無効） | 受信ログの対象ラベル（カンマ区切り: `GS_log`）。空の場合はラベル監視を行わない |
+| `GS_DISPLAY_NAME` | | 空（無効） | GroupSession での自分の表示名。`GS_LOG_LABELS` と組み合わせて自分の投稿のみを記録 |
+| `GS_LOG_LABELS` | | 空（無効） | 投稿者フィルタを適用するラベル名（カンマ区切り: `GS_log`）。`GS_DISPLAY_NAME` が未設定の場合は無視 |
 | `DEFAULT_DATE` | | `yesterday` | デフォルトの取得日。`today` または `yesterday` |
 | `OUTPUT_DIR` | | `logs` | Markdown の出力先ディレクトリ（プロジェクトルートからの相対パス） |
 | `SCREENSHOT_DIR` | | `~/Downloads/CleanShot` | CleanShot X のスクリーンショット保存先 |
@@ -281,6 +283,22 @@ URL: ...
 
 - `◆内容` マーカーが見つからないメール（形式が異なるラベルや通知）は、件名のみをログに記録します
 - 同件名（同スレッド）のメールが複数届いた場合も、それぞれ異なる投稿内容として全件記録します
+
+### 投稿者フィルタ（`GS_DISPLAY_NAME` + `GS_LOG_LABELS`）
+
+GroupSession の掲示板スレッドでは、自分以外のメンバーが書き込んでも自分に通知が届きます。このため、何も設定しないと他のメンバーの書き込みもログに含まれます。
+
+`GS_DISPLAY_NAME` と `GS_LOG_LABELS` を設定すると、**自分が投稿した通知のみ**を記録し、他のメンバーの書き込み通知を除外できます。
+
+```dotenv
+GS_DISPLAY_NAME=山田 太郎   # GroupSession の自分の表示名
+GS_LOG_LABELS=GS_log        # フィルタを適用するラベル名（カンマ区切り可）
+```
+
+フィルタの仕組み:
+- メール本文内の `┏━...┗━` ブロック（投稿者・日時が記載される箇所）に `GS_DISPLAY_NAME` が含まれるかを確認します
+- ヘッダ全体ではなくこのブロックのみを検索するため、「宛先: 自分名」との誤マッチを防ぎます
+- `GS_LOG_LABELS` に含まれないラベルのメールはフィルタ対象外です（他のラベルには影響しません）
 
 ---
 
