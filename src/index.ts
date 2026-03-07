@@ -164,7 +164,15 @@ async function main() {
       .map((s) => s.trim())
       .filter(Boolean);
     if (watchedLabels.length > 0) {
-      const labelEntries = await fetchGmailLabelActivities(keyPath, gmailAddress, range, watchedLabels);
+      const selfName = process.env.GS_DISPLAY_NAME || undefined;
+      const gsLabels = (process.env.GS_LOG_LABELS ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const labelEntries = await fetchGmailLabelActivities(
+        keyPath, gmailAddress, range, watchedLabels,
+        selfName, gsLabels.length > 0 ? gsLabels : undefined,
+      );
       allActivities.push(...labelEntries);
       console.log(`  [Gmail] ${labelEntries.length} label message(s) collected.`);
     }

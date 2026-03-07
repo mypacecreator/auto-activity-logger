@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { google } from 'googleapis';
+import type { gmail_v1 } from 'googleapis';
 import type { ActivityEntry, DateRange } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -62,6 +63,18 @@ function parseToRecipients(toHeader: string): string {
   if (parts.length <= 1) return first;
   return `${first} (+${parts.length - 1})`;
 }
+
+function extractPlainText(payload: gmail_v1.Schema$MessagePart): string {
+  if (payload.mimeType === 'text/plain' && payload.body?.data) {
+    return Buffer.from(payload.body.data, 'base64url').toString('utf-8');
+  }
+  for (const part of payload.parts ?? []) {
+    const text = extractPlainText(part);
+    if (text) return text;
+  }
+  return '';
+}
+
 
 function buildSummary(subject: string, snippet: string): string {
   const sub = subject ? `[${subject}] ` : '';
@@ -140,6 +153,8 @@ export async function fetchGmailLabelActivities(
   gmailAddress: string,
   range: DateRange,
   labels: string[],
+  selfName?: string,
+  gsLabels?: string[],
 ): Promise<ActivityEntry[]> {
   const gmail = createGmailClient(keyFilePath, gmailAddress);
   const entries: ActivityEntry[] = [];
@@ -167,14 +182,32 @@ export async function fetchGmailLabelActivities(
       const detail = await gmail.users.messages.get({
         userId: 'me',
         id: msg.id,
-        format: 'metadata',
-        metadataHeaders: ['Date', 'Subject', 'From'],
+        format: 'full',
       });
 
       const headers = detail.data.payload?.headers ?? [];
       const dateStr = getHeader(headers, 'Date');
       const subject = getHeader(headers, 'Subject');
-      const snippet = detail.data.snippet ?? '';
+      const body = detail.data.payload ? extractPlainText(detail.data.payload) : '';
+
+      // Split on ◆内容 marker: header part (before) and content (after)
+      const markerIdx = body.indexOf('◆内容');
+      const headerPart = markerIdx !== -1 ? body.slice(0, markerIdx) : body;
+      // Fall back to Gmail snippet when marker is absent (non-GroupSession labels).
+      // Normalize whitespace to prevent Markdown list formatting issues with raw text/plain.
+      const content = (markerIdx !== -1
+        ? body.slice(markerIdx + '◆内容'.length)
+        : (detail.data.snippet ?? '')
+      ).replace(/\s+/g, ' ').trim();
+
+      // Poster filter: if selfName + gsLabels are configured and this label matches,
+      // skip messages where the ┏━...┗━ box (poster info) does not contain selfName.
+      // The box is searched instead of the full header to avoid false-matching
+      // "宛先: 自分名" which always appears in GroupSession notification emails.
+      if (selfName && gsLabels?.includes(label)) {
+        const boxMatch = headerPart.match(/┏━[\s\S]*?┗━/);
+        if (!boxMatch || !boxMatch[0].includes(selfName)) continue;
+      }
 
       const timestamp = dateStr ? new Date(dateStr) : new Date();
 
@@ -186,7 +219,7 @@ export async function fetchGmailLabelActivities(
         timestamp,
         roomOrRepo: label,
         eventType: 'Received',
-        summary: buildSummary(subject, snippet),
+        summary: buildSummary(subject, content),
       });
     }
   }
