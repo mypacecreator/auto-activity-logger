@@ -193,7 +193,12 @@ export async function fetchGmailLabelActivities(
       // Split on ◆内容 marker: header part (before) and content (after)
       const markerIdx = body.indexOf('◆内容');
       const headerPart = markerIdx !== -1 ? body.slice(0, markerIdx) : body;
-      const content = markerIdx !== -1 ? body.slice(markerIdx + '◆内容'.length).trim() : '';
+      // Fall back to Gmail snippet when marker is absent (non-GroupSession labels).
+      // Normalize whitespace to prevent Markdown list formatting issues with raw text/plain.
+      const content = (markerIdx !== -1
+        ? body.slice(markerIdx + '◆内容'.length)
+        : (detail.data.snippet ?? '')
+      ).replace(/\s+/g, ' ').trim();
 
       // Poster filter: if selfName + gsLabels are configured and this label matches,
       // skip messages where the ┏━...┗━ box (poster info) does not contain selfName.
