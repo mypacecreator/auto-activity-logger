@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { google } from 'googleapis';
+import type { gmail_v1 } from 'googleapis';
 import type { ActivityEntry, DateRange } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -61,6 +62,23 @@ function parseToRecipients(toHeader: string): string {
   const first = parts[0]?.replace(/^.*<(.+)>$/, '$1').trim() || parts[0] || '';
   if (parts.length <= 1) return first;
   return `${first} (+${parts.length - 1})`;
+}
+
+function extractPlainText(payload: gmail_v1.Schema$MessagePart): string {
+  if (payload.mimeType === 'text/plain' && payload.body?.data) {
+    return Buffer.from(payload.body.data, 'base64url').toString('utf-8');
+  }
+  for (const part of payload.parts ?? []) {
+    const text = extractPlainText(part);
+    if (text) return text;
+  }
+  return '';
+}
+
+function extractAfterMarker(body: string, marker: string): string | null {
+  const idx = body.indexOf(marker);
+  if (idx === -1) return null;
+  return body.slice(idx + marker.length).trim();
 }
 
 function buildSummary(subject: string, snippet: string): string {
@@ -167,14 +185,14 @@ export async function fetchGmailLabelActivities(
       const detail = await gmail.users.messages.get({
         userId: 'me',
         id: msg.id,
-        format: 'metadata',
-        metadataHeaders: ['Date', 'Subject', 'From'],
+        format: 'full',
       });
 
       const headers = detail.data.payload?.headers ?? [];
       const dateStr = getHeader(headers, 'Date');
       const subject = getHeader(headers, 'Subject');
-      const snippet = detail.data.snippet ?? '';
+      const body = detail.data.payload ? extractPlainText(detail.data.payload) : '';
+      const content = extractAfterMarker(body, '◆内容') ?? '';
 
       const timestamp = dateStr ? new Date(dateStr) : new Date();
 
@@ -186,7 +204,7 @@ export async function fetchGmailLabelActivities(
         timestamp,
         roomOrRepo: label,
         eventType: 'Received',
-        summary: buildSummary(subject, snippet),
+        summary: buildSummary(subject, content),
       });
     }
   }
